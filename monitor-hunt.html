@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="js/jquery-1.11.1.min.js"></script>
+<script src="js/jquery.dataTables.min.js"></script>
+<script src="js/jquery.mobile-1.4.5.min.js"></script>
+
+<link rel="stylesheet" type="text/css" href="css/index.css" />
+<link rel="stylesheet" href="css/jquery.mobile-1.4.5.css" />
+<link rel="stylesheet" href="css/jquery.dataTables.min.css" />
+
+<body>
+		<div data-role="page" id="home">
+			<div data-role="header" data-position="fixed">
+				<img id="logo" src="img/gdalogo.gif"/>
+				<div class="myheader">
+					<h1>GPS High Tech <br/>Treasure Hunt!</h1>
+					<h2 class="center">Welcome <span id="myname"></span></h2>
+				</div>
+				<a href="logout.html" id="logout" class="ui-btn-right" data-mini="true">Log Out</a>
+			</div>
+			<div data-role="content" class="ui-content">
+				<h3>Treasure Hunt Dashboard</h3>
+				<span>(Turn phone sideways to view)</span>
+				<button id="btnupdatedatatable" data-ajax="false" data-inline="true" data-mini="true">Refresh Team Info</button>
+
+			<table id="myassets" class="row-border" cellspacing="0" width="100%">
+			<thead>
+			<tr>
+				<th>Team Name</th>
+				<th>Avatar</th>
+				<th># of Clues<br>Found</th>
+				<th>Items<br>Collected</th>
+				<th>Scores</th>
+			</tr>
+			</thead>
+			</table>
+			<div data-role="footer" data-position="fixed" class="center"><span>&copy; 2015 GPS Discovery Adventures</span></div>			
+        </div><!--end page div-->
+    </body>
+</html>
+
+<script type="text/javascript">
+$(document).ready(function() {
+	//fetch event id from local storage
+	var myeventid = localStorage.getItem("myeventid");
+
+  //create DataTable object and fetch data from fetchassetinfo.php
+	var mydatatable = $("#myassets").DataTable(
+	{
+		"ajax":{
+			"url": "http://mypath.mydomain.com/php/fetchassetinfo.php",
+			"type": "POST",
+			"data": {"myeventid":myeventid}
+		}, //end ajax parameter
+		"columns": [
+			{"data":"teamName","width":"30%"},
+			{"data":"teamImg","width":"20%"},			
+			{"data":"cluesFoundCount","width":"5%"},
+			{"data":"assets","width":"30%"},
+			{"data":"scores","width":"5%"}
+		],
+		"paging":false,
+		"info":false
+	});//end dataTable
+	
+	$("#btnupdatedatatable").click(function()
+	{
+		mydatatable.ajax.reload();
+	});
+});//end DOM load
+</script>
