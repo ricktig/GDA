@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <meta name="format-detection" content="telephone=no" />
+        <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, target-densitydpi=medium-dpi" />
+        <link rel="stylesheet" type="text/css" href="css/index.css" />
+	    	<script src="js/jquery-1.11.1.min.js"></script>
+    		<script src="js/jquery.mobile-1.4.5.min.js"></script>
+    		<link rel="stylesheet" href="css/jquery.mobile-1.4.5.css" />
+  	</head>
+    <body>
+  	<div id="horzmenuholder">
+		<ul>
+			<li>My Team Info</li>
+			<li>Find A Clue</li>
+			<li>All Teams' Info</li>
+		</ul>
+  	</div>
+  	<img id="logoholder">
+  	<span id="teamname" class="allcaps texttop"></span>
+  	<br>
+  	<div id="cluename">CLUE </div>
+	  <canvas id="myCanvas" height="200" width="200" style="float:left;border:1px solid black"></canvas>
+
+	  <div style="float:left">
+  		<div>
+  			<p>Distance To Clue:&nbsp;<span id="mydistance">Calculating</span></p>
+  		</div>
+  		<div>
+  			<p>Speed:&nbsp;<span id="myspeed">0 mph</span></p>
+  		</div>
+  		<button id="btnscanclue" data-inline="true">Scan Clue</button>
+  	</div>
+</body>
+</html>
+
+<script type="text/javascript" src="cordova.js"></script>
+<script type="text/javascript" src="barcodescanner.js"></script>
+<script type="text/javascript" src="js/index2.js"></script>
+
+<script type="text/javascript">
+var mylat = document.getElementById("mylatitude");
+var mylng = document.getElementById("mylongitude");
+var myhdg = document.getElementById("myheading");
+var myspd = document.getElementById("myspeed");
+var myacc = document.getElementById("myaccuracy");
+var mytimestamp = document.getElementById("mytimestamp");
+var mydist = document.getElementById("mydistance");
+
+var dataContainerOrientation = document.getElementById('dataContainerOrientation');
+var dataContainerBearing = document.getElementById('dataContainerBearing');
+var dataContainerOffset = document.getElementById('dataContainerOffset');
+
+//set canvas variables
+var mainCanvas = document.getElementById("myCanvas");
+var mainContext = mainCanvas.getContext('2d');
+//define the image
+var img = new Image();
+img.src = 'img/directionarrow3.png'; // Set source path
+
+var cluelat, cluelng, mylocation, mymiles = null;
+
+window.onload = function()
+{
+	//call function to fetch clue lat/lng
+	getlatlng();
+};
+
+function startGeolocation()
+{
+	//fetch new GPS info every 2000 milliseconds, timeout after 30000 milliseconds
+	window.setInterval(function ()
+	{
+		navigator.geolocation.getCurrentPosition(onGeoSuccess, onGeoFailure, {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 30000
+    });
+    }, 2000);
+}
+
+function onGeoSuccess(location)
+{
+	cluelat = localStorage.getItem('mycluelat');
+	cluelng = localStorage.getItem('mycluelng');
+	currentlat = location.coords.latitude;
+	currentlng = location.coords.longitude;
+	currenthdg = location.coords.heading;
+	currentspeed = location.coords.speed * 2.23694;
+
+	if (isNaN(currentspeed))
+	{
+		myspd.innerHTML = '0 mph';		
+	}
+	else
+	{
+		myspd.innerHTML = currentspeed.toFixed(1) + ' mph'; //convert meters per second to miles per hour
+	}
+	var mydistance = calculateDistance(currentlat, currentlng, cluelat, cluelng);
+	mydist.innerHTML = mydistance.mymiles + ' ' + mydistance.unit;
+
+	//call function to calculate bearing (angle between current location and clue location)
+	var cluebearing = geo.bearing(currentlat, currentlng, cluelat, cluelng);
+	//call function to rotate arrow graphic
+	rotateArrow(cluebearing);
+}	
+
+function onGeoFailure(err)
+{
+	alert('Please turn on your phone\'s GPS');
+}
+
+function parseTimestamp(timestamp) {
+	var d = new Date(timestamp);
+	var day = d.getDate();
+	var month = d.getMonth() + 1;
+	var year = d.getFullYear();
+	var hour = d.getHours();
+	var mins = d.getMinutes();
+	var secs = d.getSeconds();
+	var msec = d.getMilliseconds();
+	return day + "." + month + "." + year + " " + hour + ":" + mins + ":" + secs + "," + msec;
+}
+
+//calculate distance from clue
+function calculateDistance(latA, lonA, latB, lonB)
+{
+	//convert from degrees to radians
+	latA = latA * (Math.PI/180);
+	lonA = lonA * (Math.PI/180);
+	latB = latB * (Math.PI/180);
+	lonB = lonB * (Math.PI/180);
+	//calculate absolute difference for lat/lon
+	dLat = latA - latB;
+	dLon = lonA - lonB;
+	
+	//do the trig to calculate distance between two points on the Earth
+	var d = Math.sin(dLat/2) * Math.sin(dLat/2) + 
+			Math.cos(latA) * Math.cos(latB) * Math.sin(dLon/2) * Math.sin(dLon/2);
+	d = 2 * Math.atan2(Math.sqrt(d),Math.sqrt(1-d));
+
+	//multiply by 1/2 diameter of earth in miles and round
+	var mymiles = d * 3959; //Math.round(d*3959*100)/100;
+
+	//if distance less than 1/10th mile, return feet as display unit
+	//else return miles
+	if (mymiles <= .1)
+	{
+		mymiles = mymiles.toFixed(4) * 5280;
+		return {mymiles:mymiles.toFixed(0), unit:'ft'};
+	}
+	else
+	{
+		mymiles = mymiles.toFixed(1);
+		return {mymiles:mymiles, unit:'mi'};
+	}
+}//end calculateDistance
+
+function rotateArrow(mybearing)
+{
+	//Check for support for DeviceOrientation event
+    if(window.DeviceOrientationEvent)
+	{ 
+		//orientation listener
+		window.addEventListener('deviceorientation', function(event)
+		{
+			//fetch rotation from north from device accelerometer
+      var myalpha = event.alpha;
+			var myoffset = myalpha - mybearing;
+			//clear previous arrow image
+			mainContext.clearRect(0,0,200,200);
+			//save coordinates before rotating
+			mainContext.save();
+			//set center
+			mainContext.translate(100,100);
+			//do the rotation
+			mainContext.rotate(myoffset * (Math.PI/180));
+			//draw the rotated arrow image
+			mainContext.drawImage(img,-(img.width/2),-(img.height/2) );
+			//reset the center to previous value
+			mainContext.restore();
+    }, false);
+  }
+	else
+	{
+	  dataContainerBearing.innerHTML = 'This device won\'t support this hunt.  We need a device that has an accelerometer.';
+  }
+}//end rotateArrow()
+
+var geo = {
+	bearing: function (lat1,lng1,lat2,lng2)
+	{
+		//alert(lat1 + ' ' + lng1 + ' ' + lat2 + ' ' + lng2);
+		var dLon = this._toRad(lng2-lng1);
+		var y = Math.sin(dLon) * Math.cos(this._toRad(lat2));
+		var x = Math.cos(this._toRad(lat1))*Math.sin(this._toRad(lat2)) - Math.sin(this._toRad(lat1))*Math.cos(this._toRad(lat2))*Math.cos(dLon);
+		var brng = this._toDeg(Math.atan2(y, x));
+		return ((brng + 360) % 360);
+	},
+
+	 _toRad: function(deg)
+	{
+		return deg * Math.PI / 180;
+	},
+			
+	_toDeg : function(rad) {
+		return rad * 180 / Math.PI;
+	}
+}
+
+//function to fetch next clue location and call geolocation function
+function getlatlng()
+{
+	//localStorage.setItem('myteamid',1);
+	var myteamid = localStorage.getItem('myteamid');
+	//make AJAX call to fetch sequences
+	$.ajax(
+	{
+		url:'http://subdomain.domain.com/php/myfilename.php',
+		type:'POST',
+		dataType:'json',
+		data:{'myteamid':myteamid},
+		success:function(returndata)
+		{
+			localStorage.setItem('mycluelat', returndata.mylatitude);
+			localStorage.setItem('mycluelng', returndata.mylongitude);
+			$("#cluename").text('Clue #' + returndata.mylocationid);
+			//parse latitude and longitude for this clue
+			startGeolocation();
+		},
+		fail:function(e)
+		{
+			alert(e);
+		}
+	});//end AJAX call to fetch sequences
+}// end getlatlng
+</script>
